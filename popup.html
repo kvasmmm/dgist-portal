@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DGIST Portal Login</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 24px;
+            width: 350px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #1a73e8;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 24px;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #5f6368;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+        input:focus {
+            border-color: #1a73e8;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+        .save-btn {
+            width: 100%;
+            padding: 12px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .save-btn:hover {
+            background: #1557b0;
+        }
+        #status {
+            margin-top: 16px;
+            text-align: center;
+            color: #34a853;
+            font-size: 14px;
+            min-height: 20px;
+        }
+        .error {
+            color: #ea4335;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>DGIST Portal Login</h2>
+        <form id="loginForm">
+            <div class="input-group">
+                <label for="username">Username</label>
+                <input 
+                    id="username" 
+                    type="text" 
+                    placeholder="Enter your username"
+                    autocomplete="username"
+                />
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input 
+                    id="password" 
+                    type="password" 
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                />
+            </div>
+            <button type="submit" class="save-btn">Save Credentials</button>
+        </form>
+        <div id="status"></div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>

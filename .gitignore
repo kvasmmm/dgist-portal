@@ -1,0 +1,10 @@
+# Local development
+.DS_Store
+Thumbs.db
+
+# User data
+*.local
+*.log
+
+# Optional: Ignore zip files if you create them for distribution
+*.zip

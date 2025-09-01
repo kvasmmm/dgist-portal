@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "DGIST Portal Auto Login",
+  "version": "1.0",
+  "description": "Auto-login for DGIST Portal with saved credentials.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://isign.dgist.ac.kr/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "svag.svg",
+      "48": "svag.svg",
+      "128": "svag.svg"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://isign.dgist.ac.kr/authentication*",
+        "https://isign.dgist.ac.kr/authentication/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">DGIST Sign-in Mark (Original)</title>
+  <desc id="desc">An abstract circular monogram with layered arcs and a central keyhole to suggest secure sign-in, in blue and teal.</desc>
+
+  <defs>
+    <linearGradient id="gradBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1463F3"/>
+      <stop offset="100%" stop-color="#4D8DFB"/>
+    </linearGradient>
+    <linearGradient id="gradTeal" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10B5A6"/>
+      <stop offset="100%" stop-color="#38D0C3"/>
+    </linearGradient>
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#0A2540" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background subtle shadow for depth -->
+  <g filter="url(#softShadow)">
+    <!-- Outer arc (suggesting "D") -->
+    <!-- C = 2πr ≈ 2 * 3.14159 * 180 ≈ 1130.97 -->
+    <!-- Arc length ~ 760, gap ~ 371 -->
+    <circle cx="256" cy="256" r="180"
+            fill="none"
+            stroke="url(#gradBlue)"
+            stroke-width="26"
+            stroke-linecap="round"
+            stroke-dasharray="760 371"
+            transform="rotate(-25 256 256)"/>
+
+    <!-- Inner arc (suggesting "G") -->
+    <!-- C = 2πr ≈ 2 * 3.14159 * 140 ≈ 879.65 -->
+    <!-- Arc length ~ 540, gap ~ 340 -->
+    <circle cx="256" cy="256" r="140"
+            fill="none"
+            stroke="url(#gradTeal)"
+            stroke-width="26"
+            stroke-linecap="round"
+            stroke-dasharray="540 340"
+            transform="rotate(65 256 256)"/>
+  </g>
+
+  <!-- Central keyhole (sign-in cue) -->
+  <g aria-hidden="true">
+    <circle cx="256" cy="230" r="22" fill="#0A2540"/>
+    <rect x="238" y="252" width="36" height="72" rx="10" fill="#0A2540"/>
+  </g>
+</svg>
