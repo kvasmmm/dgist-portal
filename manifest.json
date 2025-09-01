@@ -9,7 +9,8 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://isign.dgist.ac.kr/*"
+    "https://isign.dgist.ac.kr/*",
+    "https://auth.dgist.ac.kr/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -26,7 +27,10 @@
     {
       "matches": [
         "https://isign.dgist.ac.kr/authentication*",
-        "https://isign.dgist.ac.kr/authentication/*"
+        "https://isign.dgist.ac.kr/authentication/*",
+        "https://auth.dgist.ac.kr/login*",
+        "https://auth.dgist.ac.kr/login/*",
+        "https://auth.dgist.ac.kr/login/authentication/two-factor/*"
       ],
       "js": ["content.js"]
     }

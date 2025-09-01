@@ -1,3 +1,40 @@
+// Define login form configurations for different portals
+const PORTAL_CONFIGS = {
+    isign: {
+        urls: ['isign.dgist.ac.kr/authentication'],
+        selectors: {
+            username: '#id',
+            password: '#pw',
+            button: '#btn-login'
+        }
+    },
+    auth: {
+        urls: ['auth.dgist.ac.kr/login'],
+        selectors: {
+            username: '#loginID',
+            password: '#password',
+            button: '#loginForm > div.mb-10.default.ui.tab.active > button'
+        }
+    },
+    twoFactor: {
+        urls: ['auth.dgist.ac.kr/login/authentication/two-factor/verification'],
+        selectors: {
+            alertButton: '#alert_btn'
+        }
+    }
+};
+
+// Function to determine which portal we're on
+function getCurrentPortal() {
+    const currentUrl = window.location.href;
+    for (const [portal, config] of Object.entries(PORTAL_CONFIGS)) {
+        if (config.urls.some(url => currentUrl.includes(url))) {
+            return { portal, config };
+        }
+    }
+    return null;
+}
+
 // Function to show notification using chrome.notifications
 function showNotification(title, message) {
     chrome.runtime.sendMessage({
@@ -9,10 +46,33 @@ function showNotification(title, message) {
 
 // Function to check if elements are ready
 function checkElements() {
-    const userInput = document.querySelector('#id');
-    const passInput = document.querySelector('#pw');
-    const loginBtn = document.querySelector('#btn-login');
+    const portalInfo = getCurrentPortal();
+    if (!portalInfo) return false;
+
+    const { selectors } = portalInfo.config;
+    
+    // Handle two-factor authentication page differently
+    if (portalInfo.portal === 'twoFactor') {
+        return document.querySelector(selectors.alertButton);
+    }
+
+    // Handle regular login pages
+    const userInput = document.querySelector(selectors.username);
+    const passInput = document.querySelector(selectors.password);
+    const loginBtn = document.querySelector(selectors.button);
     return userInput && passInput && loginBtn;
+}
+
+// Function to handle two-factor authentication
+function handleTwoFactor() {
+    console.log('Handling two-factor authentication...');
+    const alertBtn = document.querySelector('#alert_btn');
+    if (alertBtn) {
+        console.log('Found alert button, clicking...');
+        alertBtn.click();
+        return true;
+    }
+    return false;
 }
 
 // Function to handle login error
@@ -56,6 +116,15 @@ function checkLoginError() {
 
 // Function to fill in the login form
 function fillLoginForm() {
+    const portalInfo = getCurrentPortal();
+    if (!portalInfo) return;
+
+    // Handle two-factor authentication page
+    if (portalInfo.portal === 'twoFactor') {
+        handleTwoFactor();
+        return;
+    }
+
     console.log('Checking for saved credentials...');
     
     chrome.storage.local.get(['dgistUser', 'dgistPass'], function(data) {
@@ -67,10 +136,17 @@ function fillLoginForm() {
             const maxAttempts = 10;
             
             function tryFillForm() {
-                // Get form elements
-                const userInput = document.querySelector('#id');
-                const passInput = document.querySelector('#pw');
-                const loginBtn = document.querySelector('#btn-login');
+                const portalInfo = getCurrentPortal();
+                if (!portalInfo) {
+                    console.log('Not on a recognized login page');
+                    return;
+                }
+
+                // Get form elements using the correct selectors for the current portal
+                const { selectors } = portalInfo.config;
+                const userInput = document.querySelector(selectors.username);
+                const passInput = document.querySelector(selectors.password);
+                const loginBtn = document.querySelector(selectors.button);
 
                 if (checkElements()) {
                     console.log('Form elements found, filling credentials...');
@@ -131,7 +207,7 @@ function fillLoginForm() {
 
 // Function to check if we're on a login page
 function isLoginPage() {
-    return window.location.href.includes('isign.dgist.ac.kr/authentication');
+    return getCurrentPortal() !== null;
 }
 
 // Initial check and setup
