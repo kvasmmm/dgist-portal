@@ -11,3 +11,7 @@ Thumbs.db
 
 #test files
 test.html
+
+# misc
+*.pem
+*.crx
