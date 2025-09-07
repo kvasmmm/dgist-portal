@@ -24,12 +24,7 @@
   "https://www.googleapis.com/*",
   "https://gmail.googleapis.com/*"
   ],
-  "web_accessible_resources": [
-    {
-      "resources": ["auth.html", "test.html"],
-      "matches": ["<all_urls>"]
-    }
-  ],
+  "web_accessible_resources": [],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

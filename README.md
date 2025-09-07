@@ -38,6 +38,13 @@ Notes:
 - Secure local storage of credentials
 - Error notifications if login fails
 - Easy to update credentials through the popup
+ - Optional Gmail connection to auto-fill 2FA codes (OAuth)
+
+## Notes for users
+
+- The extension requests permissions for the DGIST login domains and Gmail API (if you connect Gmail in the popup).
+- For Gmail OAuth, you must authorize the extension via Google’s consent screen. Your tokens are stored locally.
+- Works on Microsoft Edge and Chrome (Manifest V3).
 
 ## Privacy & Security
 

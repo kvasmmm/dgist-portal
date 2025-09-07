@@ -82,8 +82,8 @@ function checkElements() {
 
 // ---- Two-Factor Authentication (2FA) ----
 // Timings
-const POLL_INTERVAL_MS = 5000;          // Gmail polling cadence
-const POLL_MAX_ATTEMPTS = 30;           // ~150s total
+const POLL_INTERVAL_MS = 1000;          // Gmail polling cadence (faster)
+const POLL_MAX_ATTEMPTS = 90;           // ~90s total
 const CONFIRM_ALERT_POLL_MS = 50;       // Confirm alert ASAP
 const CONFIRM_ALERT_MAX_MS = 5000;      // Up to 5s for confirm alert
 
@@ -185,12 +185,12 @@ async function handleTwoFactor() {
 
         // Begin polling with a short initial delay to let code be sent
         let intervalId = null;
-        setTimeout(() => {
+    setTimeout(() => {
             // First quick check
             poll();
             // Then regular interval
             intervalId = setInterval(poll, POLL_INTERVAL_MS);
-        }, 2000);
+    }, 1000);
     }
     
     return true;
@@ -218,7 +218,7 @@ async function fetchLatestGmailCode(baselineMs) {
     const accessToken = tokenData.access_token;
 
     // Get recent messages from DGIST sender; tighten query to recent to avoid old codes
-    const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent('from:no-reply@dgist.ac.kr newer_than:2d') + '&maxResults=10';
+    const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent('from:no-reply@dgist.ac.kr newer_than:1h') + '&maxResults=5';
 
     const listResp = await fetch(listUrl, {
         headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -380,7 +380,34 @@ function fillLoginForm() {
                     // Small delay before clicking the login button
                     setTimeout(() => {
                         console.log('Clicking login button...');
-                        loginBtn.click();
+                        try {
+                            // Ensure visibility
+                            loginBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
+                        } catch {}
+
+                        // Primary: click the button if clickable
+                        if (isClickable(loginBtn)) {
+                            try { loginBtn.click(); } catch (e) { console.warn('Login button click failed:', e); }
+                        } else {
+                            console.log('Login button not clickable; attempting form submit');
+                        }
+
+                        // Fallbacks: submit the form directly
+                        const formEl = loginBtn.closest('form') || document.querySelector('#loginForm');
+                        if (formEl) {
+                            try {
+                                if (typeof formEl.requestSubmit === 'function') {
+                                    formEl.requestSubmit(loginBtn);
+                                } else if (typeof formEl.submit === 'function') {
+                                    formEl.submit();
+                                }
+                            } catch (e) {
+                                console.warn('Form submit failed, trying Enter key:', e);
+                                // Last resort: simulate Enter on password field
+                                const evt = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true });
+                                passInput.dispatchEvent(evt);
+                            }
+                        }
                         
                         // Start monitoring for login error
                         let errorCheckAttempts = 0;
@@ -432,6 +459,24 @@ function isClickable(el) {
     const style = window.getComputedStyle(el);
     const notHidden = style.visibility !== 'hidden' && style.display !== 'none' && style.pointerEvents !== 'none';
     return visible && notHidden && !el.disabled;
+}
+
+// Helper: set input value and fire input/change events so frameworks react
+function setInputValue(el, value) {
+    if (!el) return;
+    try {
+        const proto = Object.getPrototypeOf(el);
+        const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+        if (desc && typeof desc.set === 'function') {
+            desc.set.call(el, value);
+        } else {
+            el.value = value;
+        }
+    } catch {
+        el.value = value;
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // Initial check and setup

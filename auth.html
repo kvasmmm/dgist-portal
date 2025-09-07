@@ -126,7 +126,7 @@
                                     fetchAndStoreVerificationCodes(resp.access_token);
                                 });
                             } else {
-                                showStatus('⚠️ Please copy this token manually: ' + resp.access_token);
+                                showStatus('Please copy this token manually: ' + resp.access_token);
                             }
                         } catch (error) {
                             showStatus('Error storing token: ' + error.message, true);

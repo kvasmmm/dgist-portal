@@ -19,14 +19,6 @@ async function initializeGmailWithIdentityAPI() {
     console.log('Initializing Gmail with Chrome Identity API');
     
     const connectBtn = document.getElementById('connectBtn');
-    const testBtn = document.getElementById('testBtn');
-    
-    if (testBtn) {
-        testBtn.onclick = function() {
-            console.log('Test button clicked');
-            alert('JavaScript is working!');
-        };
-    }
     
     if (connectBtn) {
         connectBtn.textContent = 'Connect Gmail';
@@ -48,6 +40,7 @@ async function initializeGmailWithIdentityAPI() {
             console.log('Found valid stored token');
             connectBtn.textContent = 'Connected';
             connectBtn.disabled = true;
+            // Optionally prefetch to cache latest code; UI list removed
             await fetchGmailMessages(token.access_token);
         }
     } catch (error) {
@@ -252,35 +245,7 @@ async function handleAuthSuccess(tabId, token, connectBtn) {
     }
 }
 
-async function loadStoredVerificationCodes() {
-    try {
-        const result = await new Promise(resolve => {
-            chrome.storage.local.get(['verification_codes'], resolve);
-        });
-        
-        const codes = result.verification_codes || [];
-        const codesList = document.getElementById('codes');
-        codesList.innerHTML = '';
-        
-        if (codes.length === 0) {
-            const noCodesDiv = document.createElement('div');
-            noCodesDiv.textContent = 'No verification codes found';
-            codesList.appendChild(noCodesDiv);
-            return;
-        }
-        
-        codes.forEach(codeData => {
-            const li = document.createElement('li');
-            li.textContent = `${codeData.code} (${codeData.date})`;
-            codesList.appendChild(li);
-        });
-        
-        console.log(`Loaded ${codes.length} verification codes`);
-        
-    } catch (error) {
-        console.error('Error loading verification codes:', error);
-    }
-}
+// Removed codes list UI
 
 async function fetchGmailMessages(accessToken) {
     console.log('Fetching Gmail messages');
@@ -302,13 +267,7 @@ async function fetchGmailMessages(accessToken) {
         
         console.log(`Found ${messages.length} messages`);
         
-        const codesList = document.getElementById('codes');
-        codesList.innerHTML = '';
-        
         if (messages.length === 0) {
-            const noCodesDiv = document.createElement('div');
-            noCodesDiv.textContent = 'No verification codes found';
-            codesList.appendChild(noCodesDiv);
             return;
         }
         
@@ -356,9 +315,7 @@ async function fetchGmailMessages(accessToken) {
                             const date = new Date(parseInt(messageData.internalDate));
                             const formattedDate = date.toLocaleString();
 
-                            const li = document.createElement('li');
-                            li.textContent = `${code} (${formattedDate})`;
-                            codesList.appendChild(li);
+                            // No UI list; only store latest code.
                         }
                     }
                 }
@@ -367,16 +324,11 @@ async function fetchGmailMessages(accessToken) {
             }
         }
         
-        if (processedCodes.length === 0) {
-            const noCodesDiv = document.createElement('div');
-            noCodesDiv.textContent = 'No verification codes found in recent emails';
-            codesList.appendChild(noCodesDiv);
-        }
+    // Nothing to render in UI
         
     } catch (error) {
         console.error('Error fetching Gmail messages:', error);
-        const codesList = document.getElementById('codes');
-        codesList.innerHTML = `<div class="error">Error loading verification codes: ${error.message}</div>`;
+    // Silent failure for UI; logs remain
     }
 }
 
