@@ -22,7 +22,7 @@ The extension will now automatically log you in when you visit:
 
 You can also install the packaged extension file directly:
 
-1. Download the CRX file: [DGIST Portal Auto Login.crx](https://replace-with-your-filehosting-link)
+1. Download the CRX file: [DGIST Portal Auto Login.crx](https://github.com/kvasmmm/dgist-portal/releases/tag/release)
 2. Open Edge and go to `edge://extensions/`
 3. Turn on "Developer mode" (top right)
 4. Drag and drop the `.crx` file onto the extensions page
