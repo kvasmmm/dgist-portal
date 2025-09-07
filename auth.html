@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Gmail Authentication</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #3367d6;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Gmail Authentication</h2>
+        <p>Click the button below to authorize access to your Gmail account.</p>
+        <button id="authorize_button" disabled>Authorize Gmail</button>
+        <div id="status"></div>
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer onload="gisLoaded()"></script>
+    <script src="https://apis.google.com/js/api.js" async defer onload="gapiLoaded()"></script>
+    
+    <script>
+        const CLIENT_ID = "512491148969-mkej3cctpprn0d4gabvc3tv48iaba9ae.apps.googleusercontent.com";
+        const SCOPES = "https://www.googleapis.com/auth/gmail.readonly";
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        function showStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + (isError ? 'error' : 'success');
+        }
+
+        function gapiLoaded() {
+            console.log('GAPI loaded');
+            showStatus('Loading Gmail API...');
+            gapi.load("client", initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            try {
+                console.log('Initializing GAPI client');
+                await gapi.client.init({
+                    discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest"],
+                });
+                gapiInited = true;
+                console.log('GAPI initialized');
+                checkReady();
+            } catch (error) {
+                console.error('Error initializing GAPI:', error);
+                showStatus('Error loading Gmail API: ' + error.message, true);
+            }
+        }
+
+        function gisLoaded() {
+            console.log('GIS loaded');
+            showStatus('Loading Google Identity Services...');
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: async (resp) => {
+                        console.log('Token response:', resp);
+                        if (resp.error !== undefined) {
+                            showStatus('Authorization failed: ' + resp.error, true);
+                            return;
+                        }
+                        
+                        try {
+                            showStatus('Storing authorization token...');
+                            // Store token in extension storage
+                            const tokenData = {
+                                access_token: resp.access_token,
+                                expires_in: resp.expires_in,
+                                timestamp: Date.now()
+                            };
+                            
+                            // Send token to extension
+                            if (chrome && chrome.storage) {
+                                chrome.storage.local.set({ gmail_token: tokenData }, () => {
+                                    showStatus('Successfully authorized! Fetching verification codes...');
+                                    
+                                    // Fetch and store verification codes
+                                    fetchAndStoreVerificationCodes(resp.access_token);
+                                });
+                            } else {
+                                showStatus('⚠️ Please copy this token manually: ' + resp.access_token);
+                            }
+                        } catch (error) {
+                            showStatus('Error storing token: ' + error.message, true);
+                        }
+                    },
+                });
+                gisInited = true;
+                console.log('GIS initialized');
+                checkReady();
+            } catch (error) {
+                console.error('Error initializing GIS:', error);
+                showStatus('Error loading Google Identity Services: ' + error.message, true);
+            }
+        }
+
+        function checkReady() {
+            console.log('Checking ready state - GAPI:', gapiInited, 'GIS:', gisInited);
+            if (gapiInited && gisInited) {
+                document.getElementById("authorize_button").disabled = false;
+                showStatus('Ready! Click the button to authorize.');
+            }
+        }
+
+        // Fallback: Enable button after 10 seconds if APIs don't load
+        setTimeout(() => {
+            if (!gapiInited || !gisInited) {
+                console.log('Fallback: Enabling button after timeout');
+                document.getElementById("authorize_button").disabled = false;
+                showStatus('APIs may not have loaded properly. Try clicking the button anyway.', true);
+            }
+        }, 10000);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            document.getElementById("authorize_button").onclick = () => {
+                console.log('Authorize button clicked');
+                if (!tokenClient) {
+                    showStatus('Google services not ready yet. Please wait and try again.', true);
+                    return;
+                }
+                
+                showStatus('Opening authorization window...');
+                try {
+                    tokenClient.requestAccessToken({ prompt: "consent" });
+                } catch (error) {
+                    console.error('Error requesting token:', error);
+                    showStatus('Error starting authorization: ' + error.message, true);
+                }
+            };
+        });
+
+        async function fetchAndStoreVerificationCodes(accessToken) {
+            try {
+                gapi.client.setToken({ access_token: accessToken });
+                
+                const response = await gapi.client.gmail.users.messages.list({
+                    userId: "me",
+                    q: "from:no-reply@dgist.ac.kr",
+                    maxResults: 10
+                });
+
+                const messages = response.result.messages || [];
+                const codes = [];
+
+                for (let msg of messages.slice(0, 6)) {
+                    const msgDetail = await gapi.client.gmail.users.messages.get({
+                        userId: "me",
+                        id: msg.id
+                    });
+
+                    let bodyData = "";
+                    if (msgDetail.result.payload.parts) {
+                        bodyData = msgDetail.result.payload.parts[0].body.data;
+                    } else if (msgDetail.result.payload.body.data) {
+                        bodyData = msgDetail.result.payload.body.data;
+                    }
+
+                    if (bodyData) {
+                        const decoded = atob(bodyData.replace(/-/g, "+").replace(/_/g, "/"));
+                        const match = decoded.match(/\b\d{6}\b/);
+                        if (match) {
+                            const code = match[0];
+                            const date = new Date(parseInt(msgDetail.result.internalDate));
+                            codes.push({
+                                code: code,
+                                date: date.toLocaleString()
+                            });
+                        }
+                    }
+                }
+
+                if (codes.length > 0 && chrome && chrome.storage) {
+                    chrome.storage.local.set({ 
+                        latest_verification_code: codes[0].code,
+                        verification_codes: codes
+                    });
+                    showStatus(`Success! Found ${codes.length} verification codes. Latest: ${codes[0].code}. You can close this tab.`);
+                } else {
+                    showStatus('Authorized but no verification codes found. You can close this tab.');
+                }
+
+            } catch (error) {
+                console.error('Error fetching codes:', error);
+                showStatus('Authorized but failed to fetch verification codes. You can close this tab.', true);
+            }
+        }
+    </script>
+</body>
+</html>

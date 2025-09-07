@@ -8,3 +8,6 @@ Thumbs.db
 
 # Optional: Ignore zip files if you create them for distribution
 *.zip
+
+#test files
+test.html

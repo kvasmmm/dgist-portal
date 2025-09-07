@@ -13,13 +13,16 @@ const PORTAL_CONFIGS = {
         selectors: {
             username: '#loginID',
             password: '#password',
-            button: '#loginForm > div.mb-10.default.ui.tab.active > button'
+            button: '#loginForm > div.mb-10.default.ui.tab.active > button',
+            remember: '#rememberLoginID'
         }
     },
     twoFactor: {
         urls: ['auth.dgist.ac.kr/login/authentication/two-factor/verification'],
         selectors: {
-            alertButton: '#alert_btn'
+            alertButton: '#alert_btn',
+            codeInput: '#code',
+            submitButton: 'body > div.body > div.wrap.container > div.contents > div.field > div.input.light > button'
         }
     }
 };
@@ -27,12 +30,17 @@ const PORTAL_CONFIGS = {
 // Function to determine which portal we're on
 function getCurrentPortal() {
     const currentUrl = window.location.href;
+    let best = null;
+    let bestLen = -1;
     for (const [portal, config] of Object.entries(PORTAL_CONFIGS)) {
-        if (config.urls.some(url => currentUrl.includes(url))) {
-            return { portal, config };
+        for (const url of config.urls) {
+            if (currentUrl.includes(url) && url.length > bestLen) {
+                best = { portal, config };
+                bestLen = url.length;
+            }
         }
     }
-    return null;
+    return best;
 }
 
 // Function to show notification using chrome.notifications
@@ -53,7 +61,10 @@ function checkElements() {
     
     // Handle two-factor authentication page differently
     if (portalInfo.portal === 'twoFactor') {
-        return document.querySelector(selectors.alertButton);
+        const alertBtn = document.querySelector(selectors.alertButton);
+        const codeInput = document.querySelector(selectors.codeInput);
+        const submitButton = document.querySelector(selectors.submitButton);
+        return alertBtn || (codeInput && submitButton);
     }
 
     // Handle regular login pages
@@ -64,15 +75,192 @@ function checkElements() {
 }
 
 // Function to handle two-factor authentication
-function handleTwoFactor() {
+async function handleTwoFactor() {
     console.log('Handling two-factor authentication...');
-    const alertBtn = document.querySelector('#alert_btn');
-    if (alertBtn) {
-        console.log('Found alert button, clicking...');
-        alertBtn.click();
-        return true;
+    const portalInfo = getCurrentPortal();
+    if (!portalInfo || portalInfo.portal !== 'twoFactor') return false;
+
+    const { selectors } = portalInfo.config;
+    const alertBtn = document.querySelector(selectors.alertButton);
+    const codeInput = document.querySelector(selectors.codeInput);
+    const submitButton = document.querySelector(selectors.submitButton);
+
+    if (!codeInput || !submitButton) {
+        console.log('2FA input or submit button not found yet');
+        return false;
     }
-    return false;
+
+    // Click the alert (request) button once to trigger sending the code and mark baseline time
+    if (alertBtn && !window.__dgistRequestAlertClicked) {
+        console.log('Clicking alert button to request code...');
+        window.__dgistRequestAlertClicked = true;
+        window.__dgistCodeBaseline = Date.now();
+        alertBtn.click();
+    }
+
+    // Start polling Gmail for the newest code if not already started
+    if (!window.__dgistTwoFactorPolling) {
+        window.__dgistTwoFactorPolling = true;
+
+        // Store the code we've already tried to avoid reusing an old one
+        let lastTriedCode = null;
+        let attempts = 0;
+        const maxAttempts = 30; // ~150s if 5s interval
+
+        const poll = async () => {
+            attempts++;
+            console.log(`[2FA] Poll attempt ${attempts}/${maxAttempts}`);
+
+            try {
+                const baseline = window.__dgistCodeBaseline || (window.__dgistAlertClicked ? Date.now() : 0);
+                const result = await fetchLatestGmailCode(baseline);
+                if (result && result.code && result.code !== lastTriedCode) {
+                    console.log('[2FA] New code obtained from Gmail:', result.code, 'at', new Date(result.internalDate).toLocaleTimeString());
+                    // Fill input
+                    codeInput.focus();
+                    codeInput.value = result.code;
+                    codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    codeInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    // Small delay then submit first, then click alert as soon as it appears, then submit again
+                    setTimeout(() => {
+                        if (submitButton) {
+                            console.log('[2FA] Clicking submit button after code fill');
+                            submitButton.click();
+                        }
+
+                        // Fast poll for a confirmation alert button to appear and click it ASAP
+                        const start = Date.now();
+                        const maxWaitMs = 5000; // wait up to 5s for confirm alert
+                        const pollMs = 50;
+                        const pollId = setInterval(() => {
+                            const confirmBtn = document.querySelector(selectors.alertButton);
+                            if (confirmBtn && isClickable(confirmBtn) && !window.__dgistConfirmAlertClicked) {
+                                window.__dgistConfirmAlertClicked = true;
+                                console.log('[2FA] Clicking #alert_btn confirm after submit');
+                                confirmBtn.click();
+                                setTimeout(() => {
+                                    if (submitButton) {
+                                        console.log('[2FA] Clicking submit button again after alert confirm');
+                                        submitButton.click();
+                                    }
+                                }, 100);
+                                clearInterval(pollId);
+                            }
+                            if (Date.now() - start > maxWaitMs) {
+                                clearInterval(pollId);
+                            }
+                        }, pollMs);
+                    }, 200);
+
+                    if (intervalId) clearInterval(intervalId);
+                    window.__dgistTwoFactorPolling = false;
+                    return;
+                }
+            } catch (e) {
+                console.warn('[2FA] Error while polling Gmail:', e);
+            }
+
+            if (attempts >= maxAttempts) {
+                console.log('[2FA] Gave up waiting for new code.');
+                showNotification('DGIST 2FA', 'Waited for a code but none arrived. You can request a new code and try again.');
+                clearInterval(intervalId);
+                window.__dgistTwoFactorPolling = false;
+            }
+        };
+
+        // Begin polling with a short initial delay to let code be sent
+        let intervalId = null;
+        setTimeout(() => {
+            // First quick check
+            poll();
+            // Then regular interval
+            intervalId = setInterval(poll, 5000);
+        }, 2000);
+    }
+    
+    return true;
+}
+
+// Helper: validate stored token
+function isTokenValid(tokenData) {
+    if (!tokenData || !tokenData.access_token || !tokenData.expires_in || !tokenData.timestamp) return false;
+    const expirationTime = tokenData.timestamp + (tokenData.expires_in * 1000);
+    return Date.now() < expirationTime - 5000; // 5s skew
+}
+
+// Fetch the latest 6-digit code from Gmail using stored OAuth token
+async function fetchLatestGmailCode(baselineMs) {
+    const tokenData = await new Promise(resolve => {
+        chrome.storage.local.get(['gmail_token'], (data) => resolve(data.gmail_token));
+    });
+
+    if (!isTokenValid(tokenData)) {
+        console.log('[2FA] No valid Gmail token. Please connect Gmail in the extension popup.');
+        return null;
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // Get recent messages from DGIST sender; tighten query to recent to avoid old codes
+    const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent('from:no-reply@dgist.ac.kr newer_than:2d') + '&maxResults=10';
+
+    const listResp = await fetch(listUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!listResp.ok) {
+        console.warn('[2FA] Failed to list Gmail messages:', listResp.status, listResp.statusText);
+        return null;
+    }
+
+    const listJson = await listResp.json();
+    const messages = listJson.messages || [];
+    if (!messages.length) return null;
+
+    // Iterate newest first, track the latest valid code newer than baseline
+    let best = null; // { code, internalDate }
+    for (const m of messages) {
+        try {
+            const detailResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (!detailResp.ok) continue;
+            const msg = await detailResp.json();
+
+            // Prefer text/plain parts; fallback to body
+            let bodyData = '';
+            const payload = msg.payload || {};
+            if (payload.parts && Array.isArray(payload.parts)) {
+                const textPart = payload.parts.find(p => (p.mimeType || '').includes('text/plain')) || payload.parts[0];
+                bodyData = textPart?.body?.data || '';
+            } else if (payload.body && payload.body.data) {
+                bodyData = payload.body.data;
+            }
+
+            if (!bodyData) continue;
+            const decoded = atob(bodyData.replace(/-/g, '+').replace(/_/g, '/'));
+            const match = decoded.match(/\b\d{6}\b/);
+            if (match) {
+                const code = match[0];
+                const ts = Number(msg.internalDate || 0);
+                // Accept only codes newer than the moment we requested a new code (allow 2s skew)
+                const baseline = Number(baselineMs || 0) - 2000;
+                if (!baseline || ts >= baseline) {
+                    if (!best || ts > best.internalDate) {
+                        best = { code, internalDate: ts };
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[2FA] Failed to parse a Gmail message:', e);
+        }
+    }
+
+    if (best) {
+        chrome.storage.local.set({ latest_verification_code: best.code });
+    }
+    return best;
 }
 
 // Function to handle login error
@@ -142,11 +330,19 @@ function fillLoginForm() {
                     return;
                 }
 
+                // If we navigated to 2FA during retries, switch behavior immediately
+                if (portalInfo.portal === 'twoFactor') {
+                    console.log('Detected 2FA page during login retries; switching to 2FA handler.');
+                    handleTwoFactor();
+                    return;
+                }
+
                 // Get form elements using the correct selectors for the current portal
                 const { selectors } = portalInfo.config;
                 const userInput = document.querySelector(selectors.username);
                 const passInput = document.querySelector(selectors.password);
                 const loginBtn = document.querySelector(selectors.button);
+                const rememberCb = selectors.remember ? document.querySelector(selectors.remember) : null;
 
                 if (checkElements()) {
                     console.log('Form elements found, filling credentials...');
@@ -164,6 +360,16 @@ function fillLoginForm() {
                     passInput.dispatchEvent(inputEvent);
                     passInput.dispatchEvent(changeEvent);
                     
+                    // Ensure "Remember ID" is checked on auth login page
+                    if (rememberCb && !rememberCb.checked) {
+                        try {
+                            rememberCb.click();
+                        } catch {
+                            rememberCb.checked = true;
+                            rememberCb.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+
                     // Small delay before clicking the login button
                     setTimeout(() => {
                         console.log('Clicking login button...');
@@ -210,15 +416,34 @@ function isLoginPage() {
     return getCurrentPortal() !== null;
 }
 
+// Helper: element is visible and enabled
+function isClickable(el) {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    const visible = rect.width > 0 && rect.height > 0;
+    const style = window.getComputedStyle(el);
+    const notHidden = style.visibility !== 'hidden' && style.display !== 'none' && style.pointerEvents !== 'none';
+    return visible && notHidden && !el.disabled;
+}
+
 // Initial check and setup
 if (isLoginPage()) {
     console.log('On DGIST login page, URL:', window.location.href);
     
     // Wait for the page to be loaded
+    const start = () => {
+        const info = getCurrentPortal();
+        if (info && info.portal === 'twoFactor') {
+            handleTwoFactor();
+        } else {
+            fillLoginForm();
+        }
+    };
+
     if (document.readyState === 'complete') {
-        fillLoginForm();
+        start();
     } else {
-        window.addEventListener('load', fillLoginForm);
+        window.addEventListener('load', start);
     }
     
     // Observe DOM changes for both form elements and error messages
@@ -229,15 +454,19 @@ if (isLoginPage()) {
         }
         
         if (checkElements()) {
-            console.log('Login form detected through DOM changes');
-            fillLoginForm();
+            const info = getCurrentPortal();
+            if (info && info.portal === 'twoFactor') {
+                handleTwoFactor();
+            } else {
+                console.log('Login form detected through DOM changes');
+                fillLoginForm();
+            }
         }
     });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true,
-        characterData: true,
-        subtree: true
+        characterData: true
     });
 }

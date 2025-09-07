@@ -6,11 +6,29 @@
   "permissions": [
     "storage",
     "scripting",
-    "notifications"
+    "notifications",
+    "identity",
+    "tabs",
+    "activeTab"
   ],
+  "oauth2": {
+    "client_id": "512491148969-mkej3cctpprn0d4gabvc3tv48iaba9ae.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly"
+    ]
+  },
   "host_permissions": [
     "https://isign.dgist.ac.kr/*",
-    "https://auth.dgist.ac.kr/*"
+    "https://auth.dgist.ac.kr/*",
+    "https://accounts.google.com/*",
+  "https://www.googleapis.com/*",
+  "https://gmail.googleapis.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["auth.html", "test.html"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "action": {
     "default_popup": "popup.html",

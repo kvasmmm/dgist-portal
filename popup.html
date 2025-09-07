@@ -73,6 +73,59 @@
         .error {
             color: #ea4335;
         }
+        .divider {
+            margin: 24px 0;
+            border-top: 1px solid #e0e0e0;
+        }
+        .gmail-section {
+            margin-top: 24px;
+        }
+        .gmail-section h3 {
+            color: #1a73e8;
+            margin: 0 0 16px;
+            font-size: 18px;
+        }
+        .gmail-btn {
+            width: 100%;
+            padding: 12px;
+            background: #ea4335;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            margin-bottom: 8px;
+        }
+        .gmail-btn:hover {
+            background: #d33828;
+        }
+        .gmail-btn:disabled {
+            background: #34a853;
+            cursor: default;
+        }
+        .codes-container {
+            margin-top: 20px;
+        }
+        .codes-container h4 {
+            color: #5f6368;
+            margin: 0 0 12px;
+            font-size: 14px;
+        }
+        .codes-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .codes-list li {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #3c4043;
+        }
     </style>
 </head>
 <body>
@@ -98,6 +151,18 @@
                 />
             </div>
             <button type="submit" class="save-btn">Save Credentials</button>
+            
+            <div class="divider"></div>
+            
+            <div class="gmail-section">
+                <h3>Gmail Connection</h3>
+                <button type="button" id="testBtn" class="gmail-btn">Test Basic JS</button>
+                <button type="button" id="connectBtn" class="gmail-btn">Connect Gmail</button>
+                <div class="codes-container">
+                    <h4>Recent Verification Codes</h4>
+                    <ul id="codes" class="codes-list"></ul>
+                </div>
+            </div>
         </form>
         <div id="status"></div>
     </div>
