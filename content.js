@@ -1,3 +1,8 @@
+// DGIST Portal Automation — content script
+// - Handles: login form filling (isign/auth), 2FA code retrieval from Gmail, and 2FA submission flow
+// - Key behavior: request new code, wait for newest email code, fill, submit, confirm alert, submit again
+
+// ---- Configuration ----
 // Define login form configurations for different portals
 const PORTAL_CONFIGS = {
     isign: {
@@ -27,7 +32,8 @@ const PORTAL_CONFIGS = {
     }
 };
 
-// Function to determine which portal we're on
+// ---- Utility & Portal Detection ----
+// Pick the most specific portal config that matches the current URL (longest match wins)
 function getCurrentPortal() {
     const currentUrl = window.location.href;
     let best = null;
@@ -43,7 +49,7 @@ function getCurrentPortal() {
     return best;
 }
 
-// Function to show notification using chrome.notifications
+// Show a user notification (delegated to background)
 function showNotification(title, message) {
     chrome.runtime.sendMessage({
         type: 'showNotification',
@@ -52,7 +58,7 @@ function showNotification(title, message) {
     });
 }
 
-// Function to check if elements are ready
+// Quick readiness check for required elements on the current page
 function checkElements() {
     const portalInfo = getCurrentPortal();
     if (!portalInfo) return false;
@@ -74,7 +80,14 @@ function checkElements() {
     return userInput && passInput && loginBtn;
 }
 
-// Function to handle two-factor authentication
+// ---- Two-Factor Authentication (2FA) ----
+// Timings
+const POLL_INTERVAL_MS = 5000;          // Gmail polling cadence
+const POLL_MAX_ATTEMPTS = 30;           // ~150s total
+const CONFIRM_ALERT_POLL_MS = 50;       // Confirm alert ASAP
+const CONFIRM_ALERT_MAX_MS = 5000;      // Up to 5s for confirm alert
+
+// Handle the entire 2FA interaction lifecycle on the verification page
 async function handleTwoFactor() {
     console.log('Handling two-factor authentication...');
     const portalInfo = getCurrentPortal();
@@ -103,16 +116,17 @@ async function handleTwoFactor() {
         window.__dgistTwoFactorPolling = true;
 
         // Store the code we've already tried to avoid reusing an old one
-        let lastTriedCode = null;
-        let attempts = 0;
-        const maxAttempts = 30; // ~150s if 5s interval
+    let lastTriedCode = null;
+    let attempts = 0;
+    const maxAttempts = POLL_MAX_ATTEMPTS;
 
         const poll = async () => {
             attempts++;
             console.log(`[2FA] Poll attempt ${attempts}/${maxAttempts}`);
 
             try {
-                const baseline = window.__dgistCodeBaseline || (window.__dgistAlertClicked ? Date.now() : 0);
+                // Only accept codes newer than when we requested one
+                const baseline = window.__dgistCodeBaseline || (window.__dgistRequestAlertClicked ? Date.now() : 0);
                 const result = await fetchLatestGmailCode(baseline);
                 if (result && result.code && result.code !== lastTriedCode) {
                     console.log('[2FA] New code obtained from Gmail:', result.code, 'at', new Date(result.internalDate).toLocaleTimeString());
@@ -122,7 +136,7 @@ async function handleTwoFactor() {
                     codeInput.dispatchEvent(new Event('input', { bubbles: true }));
                     codeInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-                    // Small delay then submit first, then click alert as soon as it appears, then submit again
+                    // Small delay then submit first, then click confirm alert as soon as it appears, then submit again
                     setTimeout(() => {
                         if (submitButton) {
                             console.log('[2FA] Clicking submit button after code fill');
@@ -131,8 +145,8 @@ async function handleTwoFactor() {
 
                         // Fast poll for a confirmation alert button to appear and click it ASAP
                         const start = Date.now();
-                        const maxWaitMs = 5000; // wait up to 5s for confirm alert
-                        const pollMs = 50;
+                        const maxWaitMs = CONFIRM_ALERT_MAX_MS; // wait up to 5s for confirm alert
+                        const pollMs = CONFIRM_ALERT_POLL_MS;
                         const pollId = setInterval(() => {
                             const confirmBtn = document.querySelector(selectors.alertButton);
                             if (confirmBtn && isClickable(confirmBtn) && !window.__dgistConfirmAlertClicked) {
@@ -175,21 +189,22 @@ async function handleTwoFactor() {
             // First quick check
             poll();
             // Then regular interval
-            intervalId = setInterval(poll, 5000);
+            intervalId = setInterval(poll, POLL_INTERVAL_MS);
         }, 2000);
     }
     
     return true;
 }
 
-// Helper: validate stored token
+// ---- Gmail Helpers ----
+// Validate stored token freshness
 function isTokenValid(tokenData) {
     if (!tokenData || !tokenData.access_token || !tokenData.expires_in || !tokenData.timestamp) return false;
     const expirationTime = tokenData.timestamp + (tokenData.expires_in * 1000);
     return Date.now() < expirationTime - 5000; // 5s skew
 }
 
-// Fetch the latest 6-digit code from Gmail using stored OAuth token
+// Fetch the newest 6-digit code (newer than baselineMs) from Gmail using stored OAuth token
 async function fetchLatestGmailCode(baselineMs) {
     const tokenData = await new Promise(resolve => {
         chrome.storage.local.get(['gmail_token'], (data) => resolve(data.gmail_token));
@@ -263,7 +278,8 @@ async function fetchLatestGmailCode(baselineMs) {
     return best;
 }
 
-// Function to handle login error
+// ---- Login Form & Errors ----
+// Parse and surface login error messages (alertify)
 function handleLoginError(errorMessage) {
     console.log('Login failed:', errorMessage);
     
@@ -291,7 +307,7 @@ function handleLoginError(errorMessage) {
     }
 }
 
-// Function to check for login error message
+// Check the page for a login error banner
 function checkLoginError() {
     const errorDiv = document.querySelector('div.alertify div.ajs-content');
     if (errorDiv && errorDiv.textContent.trim()) {
@@ -302,7 +318,7 @@ function checkLoginError() {
     return false;
 }
 
-// Function to fill in the login form
+// Fill in login form (isign/auth) and submit. If 2FA page detected mid-way, switch to 2FA.
 function fillLoginForm() {
     const portalInfo = getCurrentPortal();
     if (!portalInfo) return;
@@ -347,18 +363,9 @@ function fillLoginForm() {
                 if (checkElements()) {
                     console.log('Form elements found, filling credentials...');
                     
-                    // Fill in the credentials
-                    userInput.value = data.dgistUser;
-                    passInput.value = data.dgistPass;
-                    
-                    // Trigger input events to ensure form validation works
-                    const inputEvent = new Event('input', { bubbles: true });
-                    const changeEvent = new Event('change', { bubbles: true });
-                    
-                    userInput.dispatchEvent(inputEvent);
-                    userInput.dispatchEvent(changeEvent);
-                    passInput.dispatchEvent(inputEvent);
-                    passInput.dispatchEvent(changeEvent);
+                    // Fill in the credentials (with events)
+                    setInputValue(userInput, data.dgistUser);
+                    setInputValue(passInput, data.dgistPass);
                     
                     // Ensure "Remember ID" is checked on auth login page
                     if (rememberCb && !rememberCb.checked) {
@@ -411,12 +418,13 @@ function fillLoginForm() {
     });
 }
 
-// Function to check if we're on a login page
+// ---- Bootstrap ----
+// Determine if any of our portal configs match
 function isLoginPage() {
     return getCurrentPortal() !== null;
 }
 
-// Helper: element is visible and enabled
+// Helper: element is visible and enabled (click-safe)
 function isClickable(el) {
     if (!el) return false;
     const rect = el.getBoundingClientRect();
