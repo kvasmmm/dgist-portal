@@ -4,7 +4,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Create and show the notification
         chrome.notifications.create({
             type: 'basic',
-            iconUrl: 'svag.svg',
+            iconUrl: 'logo.svg',
             title: message.title,
             message: message.message,
             priority: 2

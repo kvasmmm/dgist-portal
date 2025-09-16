@@ -28,9 +28,9 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "svag.svg",
-      "48": "svag.svg",
-      "128": "svag.svg"
+      "16": "logo.svg",
+      "48": "logo.svg",
+      "128": "logo.svg"
     }
   },
   "background": {
